@@ -108,15 +108,36 @@ const DB = {
         try {
             console.log('Attempting signup with:', { email, name });
 
-            // First check if user already exists
+            // First check if user already exists in auth
             const { data: existingUser } = await supabase.auth.getUser();
             if (existingUser?.user) {
-                console.log('User already exists:', existingUser);
-                throw new Error('An account with this email already exists. Please try logging in instead.');
+                // Check if user exists in users table
+                const { data: userProfile } = await supabase
+                    .from('users')
+                    .select()
+                    .eq('id', existingUser.user.id);
+
+                if (userProfile && userProfile.length > 0) {
+                    console.log('User already exists:', existingUser);
+                    throw new Error('An account with this email already exists. Please try logging in instead.');
+                }
+
+                // If user exists in auth but not in users table, create profile
+                const { data: newProfile, error: profileError } = await supabase
+                    .from('users')
+                    .insert([{
+                        id: existingUser.user.id,
+                        name: name,
+                        created_events: [],
+                        interested_events: []
+                    }])
+                    .select()
+                    .single();
+
+                if (profileError) throw profileError;
+                return newProfile;
             }
 
-            // Update the emailRedirectTo to use your actual deployment URL
-            // For local development, use localhost
             const redirectTo = window.location.origin || 'http://localhost:3000';
             
             const { data: authData, error: authError } = await supabase.auth.signUp({
@@ -140,30 +161,30 @@ const DB = {
                 throw new Error('Failed to create user account');
             }
 
-            // Check if email is confirmed
-            if (!authData.user.confirmed_at) {
-                console.log('Email confirmation needed for:', email);
-                return {
-                    needsEmailConfirmation: true,
-                    email: email,
-                    message: 'Please check your email (including spam folder) for the confirmation link'
-                };
+            // If email is already confirmed (rare case)
+            if (authData.user.confirmed_at) {
+                const { data: userData, error: userError } = await supabase
+                    .from('users')
+                    .insert([{
+                        id: authData.user.id,
+                        name: name,
+                        created_events: [],
+                        interested_events: []
+                    }])
+                    .select()
+                    .single();
+
+                if (userError) throw userError;
+                return userData;
             }
 
-            // Create user profile
-            const { data: userData, error: userError } = await supabase
-                .from('users')
-                .insert([{
-                    id: authData.user.id,
-                    name: name,
-                    created_events: [],
-                    interested_events: []
-                }])
-                .select()
-                .single();
+            // Return confirmation needed response
+            return {
+                needsEmailConfirmation: true,
+                email: email,
+                message: 'Please check your email (including spam folder) for the confirmation link'
+            };
 
-            if (userError) throw userError;
-            return userData;
         } catch (error) {
             console.error('Signup process error:', error);
             throw error;
@@ -217,5 +238,44 @@ const DB = {
     async logout() {
         const { error } = await supabase.auth.signOut();
         if (error) throw error;
+    },
+
+    async handleEmailConfirmation(name) {
+        try {
+            // Get the current user after email confirmation
+            const { data: { user }, error: userError } = await supabase.auth.getUser();
+            
+            if (userError) throw userError;
+            if (!user) throw new Error('No user found');
+
+            // Check if profile already exists
+            const { data: existingProfile } = await supabase
+                .from('users')
+                .select()
+                .eq('id', user.id);
+
+            if (existingProfile && existingProfile.length > 0) {
+                return existingProfile[0];
+            }
+
+            // Create user profile if it doesn't exist
+            const { data: profile, error: profileError } = await supabase
+                .from('users')
+                .insert([{
+                    id: user.id,
+                    name: name || user.user_metadata?.name || 'Anonymous',
+                    created_events: [],
+                    interested_events: []
+                }])
+                .select()
+                .single();
+
+            if (profileError) throw profileError;
+            return profile;
+
+        } catch (error) {
+            console.error('Email confirmation handling error:', error);
+            throw error;
+        }
     }
 } 

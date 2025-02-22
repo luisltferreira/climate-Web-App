@@ -975,6 +975,18 @@ const loadSavedData = async () => {
 // Initialize the app
 document.addEventListener('DOMContentLoaded', async () => {
     try {
+        // Check if this is an email confirmation callback
+        const hash = window.location.hash;
+        if (hash && hash.includes('access_token')) {
+            // Handle the email confirmation
+            const name = localStorage.getItem('pendingUserName'); // You'll need to save this during signup
+            await DB.handleEmailConfirmation(name);
+            // Clear the hash and any stored pending data
+            window.location.hash = '';
+            localStorage.removeItem('pendingUserName');
+        }
+
+        // Rest of your initialization code...
         await loadSavedData();
         await MapManager.init();
         
