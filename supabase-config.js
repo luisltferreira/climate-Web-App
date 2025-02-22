@@ -137,27 +137,7 @@ const DB = {
                 throw new Error('Failed to create user account');
             }
 
-            // Create user profile immediately
-            try {
-                const { error: profileError } = await supabase
-                    .from('users')
-                    .insert([{
-                        id: authData.user.id,
-                        name: name,
-                        created_events: [],
-                        interested_events: []
-                    }]);
-
-                if (profileError) {
-                    console.error('Profile creation error:', profileError);
-                    throw profileError; // Now throwing the error since it's important
-                }
-            } catch (profileError) {
-                console.error('Profile creation error:', profileError);
-                throw new Error('Database error saving new user');
-            }
-
-            // Return confirmation needed response
+            // Don't create profile here - wait for email confirmation
             return {
                 needsEmailConfirmation: true,
                 email: email,
@@ -167,12 +147,6 @@ const DB = {
         } catch (error) {
             console.error('Signup process error:', error);
             localStorage.removeItem('pendingUserName');
-
-            // Handle specific error messages
-            if (error.message.includes('User already registered')) {
-                throw new Error('This email is already registered. Please try logging in instead.');
-            }
-
             throw error;
         }
     },
@@ -194,26 +168,31 @@ const DB = {
                 throw authError;
             }
 
-            console.log('Login successful, getting user profile...');
-
-            // Get user profile - Modified to handle multiple results
-            const { data: userResults, error: userError } = await supabase
-                .from('users')
-                .select()
-                .eq('id', authData.user.id);
-
-            if (userError) {
-                console.error('User profile error:', userError);
-                throw userError;
+            if (!authData?.user) {
+                throw new Error('No user data received during login');
             }
 
-            // Handle case where no user profile exists
-            if (!userResults || userResults.length === 0) {
+            console.log('Login successful, getting user profile...');
+
+            // Get user profile
+            const { data: profile, error: profileError } = await supabase
+                .from('users')
+                .select()
+                .eq('id', authData.user.id)
+                .single();
+
+            if (profileError) {
+                console.error('Profile fetch error:', profileError);
+                throw new Error('Could not fetch user profile');
+            }
+
+            if (!profile) {
+                console.error('No profile found for user');
                 throw new Error('User profile not found');
             }
 
-            // Return the first user profile found
-            return userResults[0];
+            console.log('Login complete, returning profile:', profile);
+            return profile;
 
         } catch (error) {
             console.error('Login process error:', error);
@@ -231,20 +210,36 @@ const DB = {
             // Get the current user after email confirmation
             const { data: { user }, error: userError } = await supabase.auth.getUser();
             
-            if (userError) throw userError;
-            if (!user) throw new Error('No user found');
-
-            // Check if profile already exists
-            const { data: existingProfile } = await supabase
-                .from('users')
-                .select()
-                .eq('id', user.id);
-
-            if (existingProfile && existingProfile.length > 0) {
-                return existingProfile[0];
+            if (userError) {
+                console.error('Auth error during confirmation:', userError);
+                throw userError;
+            }
+            
+            if (!user) {
+                console.error('No user found during confirmation');
+                throw new Error('No user found');
             }
 
-            // Create user profile if it doesn't exist
+            console.log('Handling email confirmation for user:', user);
+
+            // Check if profile already exists
+            const { data: existingProfile, error: checkError } = await supabase
+                .from('users')
+                .select()
+                .eq('id', user.id)
+                .single();
+
+            if (checkError && !checkError.message?.includes('No rows found')) {
+                console.error('Error checking existing profile:', checkError);
+                throw checkError;
+            }
+
+            if (existingProfile) {
+                console.log('Profile already exists:', existingProfile);
+                return existingProfile;
+            }
+
+            // Create user profile
             const { data: profile, error: profileError } = await supabase
                 .from('users')
                 .insert([{
@@ -256,7 +251,12 @@ const DB = {
                 .select()
                 .single();
 
-            if (profileError) throw profileError;
+            if (profileError) {
+                console.error('Error creating profile:', profileError);
+                throw profileError;
+            }
+
+            console.log('Created new profile:', profile);
             return profile;
 
         } catch (error) {
