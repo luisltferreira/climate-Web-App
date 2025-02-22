@@ -783,15 +783,20 @@ const UI = {
         try {
             // Show loading screen first
             const loadingScreen = document.getElementById('loadingScreen');
-            loadingScreen.classList.add('show');
+            if (loadingScreen) {
+                loadingScreen.classList.add('show');
+            }
             
             // Hide welcome screen
-            document.getElementById('welcomeScreen').classList.remove('show');
+            const welcomeScreen = document.getElementById('welcomeScreen');
+            if (welcomeScreen) {
+                welcomeScreen.classList.remove('show');
+            }
 
             // Load events from database
             const events = await DB.getEvents();
-            console.log('Loaded events:', events); // Debug log
-            STATE.events = events;
+            console.log('Loaded events:', events);
+            STATE.events = events || [];
 
             // Try to get user's location
             try {
@@ -809,27 +814,46 @@ const UI = {
             const map = document.getElementById('map');
             const menu = document.querySelector('.menu');
             
-            map.style.visibility = 'visible';
-            menu.style.display = 'flex';
-            menu.classList.add('show');
-            loadingScreen.classList.remove('show');
+            if (map) map.style.visibility = 'visible';
+            if (menu) {
+                menu.style.display = 'flex';
+                menu.classList.add('show');
+            }
+            if (loadingScreen) {
+                loadingScreen.classList.remove('show');
+            }
             
             if (STATE.map) {
                 STATE.map.invalidateSize();
                 
                 // If we have location permission, center the map
                 if (STATE.locationPermission) {
-                    const position = await this.getCurrentPosition();
-                    STATE.map.setView([position.coords.latitude, position.coords.longitude], 13);
+                    try {
+                        const position = await this.getCurrentPosition();
+                        STATE.map.setView([position.coords.latitude, position.coords.longitude], 13);
+                    } catch (error) {
+                        console.warn('Could not center map on user location:', error);
+                        // Set a default view if we can't get the user's location
+                        STATE.map.setView([0, 0], 2);
+                    }
                 }
             }
 
-            this.showToast(`Welcome${STATE.user.name ? ' ' + STATE.user.name : ''}!`, 'success');
-            MapManager.renderEvents();
+            // Show welcome message if we have a user name
+            if (STATE.user && STATE.user.name) {
+                this.showToast(`Welcome ${STATE.user.name}!`, 'success');
+            }
+
+            // Render any events
+            if (MapManager && typeof MapManager.renderEvents === 'function') {
+                MapManager.renderEvents();
+            }
 
         } catch (error) {
             console.error('Error in startApp:', error);
-            document.getElementById('loadingScreen').classList.remove('show');
+            if (loadingScreen) {
+                loadingScreen.classList.remove('show');
+            }
             this.showToast('An error occurred. Please try again.', 'error');
         }
     },
@@ -912,8 +936,14 @@ const UI = {
                 this.showToast('Invalid login credentials', 'error');
                 return;
             }
-            STATE.user = user;
-            this.startApp();
+            // Update STATE.user with proper array types
+            STATE.user = {
+                id: user.id,
+                name: user.name,
+                createdEvents: Array.isArray(user.created_events) ? user.created_events : [],
+                interestedEvents: Array.isArray(user.interested_events) ? user.interested_events : []
+            };
+            await this.startApp();
         } catch (error) {
             console.error('Login failed:', error);
             this.showToast(
