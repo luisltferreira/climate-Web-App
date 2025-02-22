@@ -111,8 +111,8 @@ const DB = {
             // Store the name for later use after email confirmation
             localStorage.setItem('pendingUserName', name);
 
-            // Use the correct GitHub Pages URL format
-            const githubPagesUrl = 'https://luisferreira1.github.io/climate/index.html';
+            // Use the correct GitHub Pages URL for your deployment
+            const githubPagesUrl = 'https://luisltferreira.github.io/climate-Web-App';
             const redirectTo = `${githubPagesUrl}?verification=true`;
             
             console.log('Redirect URL:', redirectTo); // Debug log
