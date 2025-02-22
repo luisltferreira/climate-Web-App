@@ -975,18 +975,39 @@ const loadSavedData = async () => {
 // Initialize the app
 document.addEventListener('DOMContentLoaded', async () => {
     try {
-        // Check if this is an email confirmation callback
-        const hash = window.location.hash;
-        if (hash && hash.includes('access_token')) {
-            // Handle the email confirmation
-            const name = localStorage.getItem('pendingUserName'); // You'll need to save this during signup
-            await DB.handleEmailConfirmation(name);
-            // Clear the hash and any stored pending data
-            window.location.hash = '';
-            localStorage.removeItem('pendingUserName');
+        // Check for email verification
+        const params = new URLSearchParams(window.location.search);
+        const isVerification = params.get('verification') === 'true';
+        
+        if (isVerification) {
+            // Show loading screen
+            document.getElementById('loadingScreen').classList.add('show');
+            
+            try {
+                const name = localStorage.getItem('pendingUserName');
+                const userData = await DB.handleEmailConfirmation(name);
+                
+                // Update application state
+                STATE.user = userData;
+                
+                // Clear verification state
+                window.history.replaceState({}, document.title, window.location.pathname);
+                localStorage.removeItem('pendingUserName');
+                
+                // Show success message
+                UI.showToast('Email verified successfully! Welcome to the app.', 'success');
+                
+                // Start the app
+                await UI.startApp();
+            } catch (error) {
+                console.error('Verification error:', error);
+                UI.showToast('Email verification failed. Please try again or contact support.', 'error');
+                document.getElementById('loadingScreen').classList.remove('show');
+            }
+            return;
         }
 
-        // Rest of your initialization code...
+        // Normal initialization
         await loadSavedData();
         await MapManager.init();
         
@@ -994,13 +1015,13 @@ document.addEventListener('DOMContentLoaded', async () => {
         const map = document.getElementById('map');
         const menu = document.querySelector('.menu');
         
-        // Always show welcome screen on initial load
         welcomeScreen.classList.add('show');
         map.style.visibility = 'hidden';
         menu.style.display = 'none';
         
     } catch (error) {
         console.error('App initialization failed:', error);
+        UI.showToast('Failed to initialize the app. Please refresh the page.', 'error');
     }
 });
 

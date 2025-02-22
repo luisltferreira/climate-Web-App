@@ -111,15 +111,16 @@ const DB = {
             // Store the name for later use after email confirmation
             localStorage.setItem('pendingUserName', name);
 
-            // Use the full URL path for email confirmation
-            const redirectTo = `${window.location.origin}${window.location.pathname}`;
+            // Get the current URL without any hash or query parameters
+            const baseUrl = window.location.origin + window.location.pathname;
+            const redirectTo = `${baseUrl}?verification=true`;
             
             const { data: authData, error: authError } = await supabase.auth.signUp({
                 email,
                 password,
                 options: {
                     data: { name },
-                    emailRedirectTo: redirectTo // This should match your actual site URL
+                    emailRedirectTo: redirectTo
                 }
             });
 
@@ -135,27 +136,16 @@ const DB = {
                 throw new Error('Failed to create user account');
             }
 
-            // Check if user already exists
-            if (authData.user?.aud === 'authenticated') {
-                throw new Error('An account with this email already exists. Please try logging in instead.');
-            }
-
-            // Return confirmation needed response
+            // Return confirmation needed response with more detailed message
             return {
                 needsEmailConfirmation: true,
                 email: email,
-                message: 'Please check your email (including spam folder) for the confirmation link'
+                message: `Verification email sent to ${email}. Please check your inbox and spam folder. The link will redirect you back to this page.`
             };
 
         } catch (error) {
             console.error('Signup process error:', error);
             localStorage.removeItem('pendingUserName');
-            
-            // Handle specific error cases
-            if (error.message.includes('Auth session missing')) {
-                throw new Error('Failed to create account. Please try again.');
-            }
-            
             throw error;
         }
     },
