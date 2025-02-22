@@ -108,35 +108,8 @@ const DB = {
         try {
             console.log('Attempting signup with:', { email, name });
 
-            // First check if user already exists in auth
-            const { data: existingUser } = await supabase.auth.getUser();
-            if (existingUser?.user) {
-                // Check if user exists in users table
-                const { data: userProfile } = await supabase
-                    .from('users')
-                    .select()
-                    .eq('id', existingUser.user.id);
-
-                if (userProfile && userProfile.length > 0) {
-                    console.log('User already exists:', existingUser);
-                    throw new Error('An account with this email already exists. Please try logging in instead.');
-                }
-
-                // If user exists in auth but not in users table, create profile
-                const { data: newProfile, error: profileError } = await supabase
-                    .from('users')
-                    .insert([{
-                        id: existingUser.user.id,
-                        name: name,
-                        created_events: [],
-                        interested_events: []
-                    }])
-                    .select()
-                    .single();
-
-                if (profileError) throw profileError;
-                return newProfile;
-            }
+            // Store the name for later use after email confirmation
+            localStorage.setItem('pendingUserName', name);
 
             const redirectTo = window.location.origin || 'http://localhost:3000';
             
@@ -144,7 +117,7 @@ const DB = {
                 email,
                 password,
                 options: {
-                    data: { name },
+                    data: { name }, // Store name in user metadata
                     emailRedirectTo: redirectTo
                 }
             });
@@ -159,23 +132,6 @@ const DB = {
             if (!authData?.user) {
                 console.error('No user data received');
                 throw new Error('Failed to create user account');
-            }
-
-            // If email is already confirmed (rare case)
-            if (authData.user.confirmed_at) {
-                const { data: userData, error: userError } = await supabase
-                    .from('users')
-                    .insert([{
-                        id: authData.user.id,
-                        name: name,
-                        created_events: [],
-                        interested_events: []
-                    }])
-                    .select()
-                    .single();
-
-                if (userError) throw userError;
-                return userData;
             }
 
             // Return confirmation needed response
