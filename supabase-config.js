@@ -108,14 +108,13 @@ const DB = {
         try {
             console.log('Attempting signup with:', { email, name });
 
-            // Check if email already exists in auth
-            const { data: { user: existingUser }, error: checkError } = await supabase.auth.getUser();
-            
-            if (checkError && !checkError.message.includes('not logged in')) {
-                throw checkError;
-            }
+            // Check if email already exists by trying to sign in
+            const { data: checkData, error: checkError } = await supabase.auth.signInWithPassword({
+                email,
+                password
+            });
 
-            if (existingUser) {
+            if (checkData?.user) {
                 throw new Error('An account with this email already exists. Please try logging in instead.');
             }
 
@@ -156,6 +155,12 @@ const DB = {
         } catch (error) {
             console.error('Signup process error:', error);
             localStorage.removeItem('pendingUserName');
+            
+            // Handle specific error cases
+            if (error.message.includes('Auth session missing')) {
+                throw new Error('Failed to create account. Please try again.');
+            }
+            
             throw error;
         }
     },
