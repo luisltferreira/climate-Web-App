@@ -238,68 +238,81 @@ const DB = {
 
     async handleEmailConfirmation(name) {
         try {
-            // Get the session from the URL hash
-            const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+            // First try to exchange the token from the URL hash
+            const hashParams = new URLSearchParams(window.location.hash.substring(1));
+            const accessToken = hashParams.get('access_token');
+            const refreshToken = hashParams.get('refresh_token');
             
-            if (sessionError) {
-                console.error('Session error during confirmation:', sessionError);
-                throw sessionError;
+            console.log('Auth tokens from URL:', { accessToken: !!accessToken, refreshToken: !!refreshToken });
+
+            if (accessToken && refreshToken) {
+                // Set the session with the tokens
+                const { data: { session }, error: setSessionError } = await supabase.auth.setSession({
+                    access_token: accessToken,
+                    refresh_token: refreshToken
+                });
+
+                if (setSessionError) {
+                    console.error('Error setting session:', setSessionError);
+                    throw setSessionError;
+                }
+
+                if (!session?.user) {
+                    throw new Error('No user found in session after setting tokens');
+                }
+
+                console.log('Session established:', session.user);
+
+                // Check if profile already exists
+                const { data: existingProfile, error: checkError } = await supabase
+                    .from('users')
+                    .select()
+                    .eq('id', session.user.id)
+                    .maybeSingle(); // Use maybeSingle instead of single
+
+                if (checkError) {
+                    console.error('Error checking existing profile:', checkError);
+                    throw checkError;
+                }
+
+                if (existingProfile) {
+                    console.log('Profile already exists:', existingProfile);
+                    return existingProfile;
+                }
+
+                // Create user profile if it doesn't exist
+                const { data: profile, error: profileError } = await supabase
+                    .from('users')
+                    .insert([{
+                        id: session.user.id,
+                        name: name || session.user.user_metadata?.name || 'Anonymous',
+                        created_events: [],
+                        interested_events: []
+                    }])
+                    .select()
+                    .single();
+
+                if (profileError) {
+                    console.error('Error creating profile:', profileError);
+                    throw profileError;
+                }
+
+                console.log('Created new profile:', profile);
+                return profile;
+            } else {
+                throw new Error('No authentication tokens found in URL');
             }
-
-            if (!session?.user) {
-                console.error('No session found during confirmation');
-                throw new Error('No session found. Please try logging in.');
-            }
-
-            console.log('Handling email confirmation for user:', session.user);
-
-            // Check if profile already exists
-            const { data: existingProfile, error: checkError } = await supabase
-                .from('users')
-                .select()
-                .eq('id', session.user.id)
-                .single();
-
-            if (checkError && !checkError.message?.includes('No rows found')) {
-                console.error('Error checking existing profile:', checkError);
-                throw checkError;
-            }
-
-            if (existingProfile) {
-                console.log('Profile already exists:', existingProfile);
-                return existingProfile;
-            }
-
-            // Create user profile if it doesn't exist
-            const { data: profile, error: profileError } = await supabase
-                .from('users')
-                .insert([{
-                    id: session.user.id,
-                    name: name || session.user.user_metadata?.name || 'Anonymous',
-                    created_events: [],
-                    interested_events: []
-                }])
-                .select()
-                .single();
-
-            if (profileError) {
-                console.error('Error creating profile:', profileError);
-                throw profileError;
-            }
-
-            console.log('Created new profile:', profile);
-            return profile;
 
         } catch (error) {
             console.error('Email confirmation handling error:', error);
             // Add more specific error messages
-            if (error.message?.includes('No session found')) {
-                throw new Error('Email verification failed. Please try logging in directly.');
+            if (error.message?.includes('No authentication tokens')) {
+                throw new Error('Invalid verification link. Please try logging in directly.');
             }
             if (error.message?.includes('JWT expired')) {
                 throw new Error('Verification link has expired. Please request a new one.');
             }
-            throw new Error('Email verification failed. Please try again or contact support.');
+            throw error;
         }
     }
 }
