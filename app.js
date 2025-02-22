@@ -1055,11 +1055,25 @@ const initializeApp = async () => {
         
         if (isVerification) {
             try {
+                // Show loading screen
+                const loadingScreen = document.getElementById('loadingScreen');
+                if (loadingScreen) loadingScreen.classList.add('show');
+
+                // Get the name from storage
                 const name = localStorage.getItem('pendingUserName');
+                console.log('Stored name for verification:', name);
+
+                // Handle the email confirmation
                 const userData = await DB.handleEmailConfirmation(name);
+                console.log('Email confirmation successful:', userData);
                 
                 // Update application state
-                STATE.user = userData;
+                STATE.user = {
+                    id: userData.id,
+                    name: userData.name,
+                    createdEvents: Array.isArray(userData.created_events) ? userData.created_events : [],
+                    interestedEvents: Array.isArray(userData.interested_events) ? userData.interested_events : []
+                };
                 
                 // Clear verification state
                 window.history.replaceState({}, document.title, window.location.pathname);
@@ -1072,8 +1086,16 @@ const initializeApp = async () => {
                 await UI.startApp();
             } catch (error) {
                 console.error('Verification error:', error);
-                UI.showToast('Email verification failed. Please try again or contact support.', 'error');
-                loadingScreen.classList.remove('show');
+                UI.showToast(error.message || 'Email verification failed. Please try again.', 'error');
+                
+                // Hide loading screen and show welcome screen
+                const loadingScreen = document.getElementById('loadingScreen');
+                const welcomeScreen = document.getElementById('welcomeScreen');
+                if (loadingScreen) loadingScreen.classList.remove('show');
+                if (welcomeScreen) welcomeScreen.classList.add('show');
+                
+                // Switch to login form since verification failed
+                UI.toggleAuthForm('login');
             }
             return;
         }

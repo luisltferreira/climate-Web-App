@@ -239,26 +239,26 @@ const DB = {
 
     async handleEmailConfirmation(name) {
         try {
-            // Get the current user after email confirmation
-            const { data: { user }, error: userError } = await supabase.auth.getUser();
+            // Get the session from the URL hash
+            const { data: { session }, error: sessionError } = await supabase.auth.getSession();
             
-            if (userError) {
-                console.error('Auth error during confirmation:', userError);
-                throw userError;
-            }
-            
-            if (!user) {
-                console.error('No user found during confirmation');
-                throw new Error('No user found');
+            if (sessionError) {
+                console.error('Session error during confirmation:', sessionError);
+                throw sessionError;
             }
 
-            console.log('Handling email confirmation for user:', user);
+            if (!session?.user) {
+                console.error('No session found during confirmation');
+                throw new Error('No session found. Please try logging in.');
+            }
+
+            console.log('Handling email confirmation for user:', session.user);
 
             // Check if profile already exists
             const { data: existingProfile, error: checkError } = await supabase
                 .from('users')
                 .select()
-                .eq('id', user.id)
+                .eq('id', session.user.id)
                 .single();
 
             if (checkError && !checkError.message?.includes('No rows found')) {
@@ -271,12 +271,12 @@ const DB = {
                 return existingProfile;
             }
 
-            // Create user profile
+            // Create user profile if it doesn't exist
             const { data: profile, error: profileError } = await supabase
                 .from('users')
                 .insert([{
-                    id: user.id,
-                    name: name || user.user_metadata?.name || 'Anonymous',
+                    id: session.user.id,
+                    name: name || session.user.user_metadata?.name || 'Anonymous',
                     created_events: [],
                     interested_events: []
                 }])
@@ -293,7 +293,14 @@ const DB = {
 
         } catch (error) {
             console.error('Email confirmation handling error:', error);
-            throw error;
+            // Add more specific error messages
+            if (error.message?.includes('No session found')) {
+                throw new Error('Email verification failed. Please try logging in directly.');
+            }
+            if (error.message?.includes('JWT expired')) {
+                throw new Error('Verification link has expired. Please request a new one.');
+            }
+            throw new Error('Email verification failed. Please try again or contact support.');
         }
     }
 }
