@@ -111,9 +111,9 @@ const DB = {
             // Store the name for later use after email confirmation
             localStorage.setItem('pendingUserName', name);
 
-            // Get the current URL without any hash or query parameters
-            const baseUrl = window.location.origin + window.location.pathname;
-            const redirectTo = `${baseUrl}?verification=true`;
+            // Use GitHub Pages URL instead of localhost
+            const githubPagesUrl = 'https://luisferreira1.github.io/climate';
+            const redirectTo = `${githubPagesUrl}?verification=true`;
             
             // Try to sign up the user
             const { data: authData, error: authError } = await supabase.auth.signUp({
@@ -150,11 +150,11 @@ const DB = {
 
                 if (profileError) {
                     console.error('Profile creation error:', profileError);
-                    // Don't throw here, still allow email verification to proceed
+                    throw profileError; // Now throwing the error since it's important
                 }
             } catch (profileError) {
                 console.error('Profile creation error:', profileError);
-                // Don't throw here, still allow email verification to proceed
+                throw new Error('Database error saving new user');
             }
 
             // Return confirmation needed response
@@ -264,4 +264,4 @@ const DB = {
             throw error;
         }
     }
-} 
+}
