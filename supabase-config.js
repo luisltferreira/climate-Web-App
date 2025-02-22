@@ -263,56 +263,63 @@ const DB = {
 
                 console.log('Session established:', session.user);
 
-                // Check if profile already exists
-                const { data: existingProfile, error: checkError } = await supabase
-                    .from('users')
-                    .select()
-                    .eq('id', session.user.id)
-                    .maybeSingle(); // Use maybeSingle instead of single
+                try {
+                    // Check if profile already exists - fixed query format
+                    const { data: existingProfile, error: checkError } = await supabase
+                        .from('users')
+                        .select('*')
+                        .eq('id', session.user.id)
+                        .single();
 
-                if (checkError) {
-                    console.error('Error checking existing profile:', checkError);
-                    throw checkError;
+                    if (existingProfile) {
+                        console.log('Profile already exists:', existingProfile);
+                        return existingProfile;
+                    }
+
+                    // No profile exists, create one
+                    console.log('Creating new profile for user:', session.user.id);
+                    const { data: profile, error: profileError } = await supabase
+                        .from('users')
+                        .insert({
+                            id: session.user.id,
+                            name: name || session.user.user_metadata?.name || 'Anonymous',
+                            created_events: [],
+                            interested_events: []
+                        })
+                        .select()
+                        .single();
+
+                    if (profileError) {
+                        console.error('Error creating profile:', profileError);
+                        throw profileError;
+                    }
+
+                    console.log('Created new profile:', profile);
+                    return profile;
+
+                } catch (dbError) {
+                    console.error('Database operation failed:', dbError);
+                    throw new Error('Failed to create or retrieve user profile');
                 }
-
-                if (existingProfile) {
-                    console.log('Profile already exists:', existingProfile);
-                    return existingProfile;
-                }
-
-                // Create user profile if it doesn't exist
-                const { data: profile, error: profileError } = await supabase
-                    .from('users')
-                    .insert([{
-                        id: session.user.id,
-                        name: name || session.user.user_metadata?.name || 'Anonymous',
-                        created_events: [],
-                        interested_events: []
-                    }])
-                    .select()
-                    .single();
-
-                if (profileError) {
-                    console.error('Error creating profile:', profileError);
-                    throw profileError;
-                }
-
-                console.log('Created new profile:', profile);
-                return profile;
             } else {
                 throw new Error('No authentication tokens found in URL');
             }
 
         } catch (error) {
-            console.error('Email confirmation handling error:', error);
-            // Add more specific error messages
+            console.error('Email confirmation handling error:', {
+                message: error.message,
+                details: error.details,
+                hint: error.hint,
+                code: error.code
+            });
+            
             if (error.message?.includes('No authentication tokens')) {
                 throw new Error('Invalid verification link. Please try logging in directly.');
             }
             if (error.message?.includes('JWT expired')) {
                 throw new Error('Verification link has expired. Please request a new one.');
             }
-            throw error;
+            throw new Error('Failed to complete email verification. Please try logging in.');
         }
     }
 }
