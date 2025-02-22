@@ -201,8 +201,13 @@ const DB = {
     },
 
     async logout() {
-        const { error } = await supabase.auth.signOut();
-        if (error) throw error;
+        try {
+            const { error } = await supabase.auth.signOut();
+            if (error) throw error;
+        } catch (error) {
+            console.error('Error during logout:', error);
+            throw error;
+        }
     },
 
     async handleEmailConfirmation(name) {

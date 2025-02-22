@@ -860,6 +860,9 @@ const UI = {
 
     async logout() {
         try {
+            // Sign out from Supabase
+            await DB.logout();
+            
             // Reset state
             STATE.user = {
                 id: null,
@@ -875,11 +878,14 @@ const UI = {
             
             // Show welcome screen
             const welcomeScreen = document.getElementById('welcomeScreen');
-            welcomeScreen.classList.add('show');
+            if (welcomeScreen) welcomeScreen.classList.add('show');
             
             // Hide menu and map
-            document.querySelector('.menu').classList.remove('show');
-            document.getElementById('map').style.visibility = 'hidden';
+            const menu = document.querySelector('.menu');
+            const map = document.getElementById('map');
+            
+            if (menu) menu.classList.remove('show');
+            if (map) map.style.visibility = 'hidden';
             
             this.showToast('You have been logged out', 'info');
         } catch (error) {
@@ -977,16 +983,16 @@ document.head.appendChild(style);
 const loadSavedData = async () => {
     try {
         // Check for existing session
-        const { data: { user }, error: sessionError } = await supabase.auth.getUser();
+        const { data: { session }, error: sessionError } = await supabase.auth.getSession();
         
         if (sessionError) throw sessionError;
 
-        if (user) {
+        if (session?.user) {
             // User is logged in, get their profile
             const { data: profile, error: profileError } = await supabase
                 .from('users')
                 .select()
-                .eq('id', user.id)
+                .eq('id', session.user.id)
                 .single();
 
             if (profileError) throw profileError;
