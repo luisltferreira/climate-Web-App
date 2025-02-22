@@ -1038,14 +1038,15 @@ const loadSavedData = async () => {
 // Initialize the app
 document.addEventListener('DOMContentLoaded', async () => {
     try {
-        // Check for email verification
+        // Show loading screen initially
+        const loadingScreen = document.getElementById('loadingScreen');
+        if (loadingScreen) loadingScreen.classList.add('show');
+
+        // Check for email verification first
         const params = new URLSearchParams(window.location.search);
         const isVerification = params.get('verification') === 'true';
         
         if (isVerification) {
-            // Show loading screen
-            document.getElementById('loadingScreen').classList.add('show');
-            
             try {
                 const name = localStorage.getItem('pendingUserName');
                 const userData = await DB.handleEmailConfirmation(name);
@@ -1065,31 +1066,57 @@ document.addEventListener('DOMContentLoaded', async () => {
             } catch (error) {
                 console.error('Verification error:', error);
                 UI.showToast('Email verification failed. Please try again or contact support.', 'error');
-                document.getElementById('loadingScreen').classList.remove('show');
+                loadingScreen.classList.remove('show');
             }
             return;
         }
 
-        // Initialize map
-        await MapManager.init();
-        
-        // Load saved data and check for existing session
+        // Load saved data and check for existing session first
         await loadSavedData();
+
+        // Initialize map only if needed
+        if (!STATE.map) {
+            await MapManager.init();
+        }
         
-        // Only show welcome screen if no session exists
-        if (!STATE.user.id) {
-            const welcomeScreen = document.getElementById('welcomeScreen');
-            const map = document.getElementById('map');
-            const menu = document.querySelector('.menu');
-            
+        // Handle UI state based on session
+        const welcomeScreen = document.getElementById('welcomeScreen');
+        const map = document.getElementById('map');
+        const menu = document.querySelector('.menu');
+
+        if (STATE.user.id) {
+            // User is logged in, show app
+            if (welcomeScreen) welcomeScreen.classList.remove('show');
+            if (map) map.style.visibility = 'visible';
+            if (menu) {
+                menu.style.display = 'flex';
+                menu.classList.add('show');
+            }
+            // Make sure map is properly sized
+            if (STATE.map) {
+                STATE.map.invalidateSize();
+            }
+        } else {
+            // No user logged in, show welcome screen
             if (welcomeScreen) welcomeScreen.classList.add('show');
             if (map) map.style.visibility = 'hidden';
             if (menu) menu.style.display = 'none';
         }
+
+        // Hide loading screen
+        if (loadingScreen) loadingScreen.classList.remove('show');
         
     } catch (error) {
         console.error('App initialization failed:', error);
         UI.showToast('Failed to initialize the app. Please refresh the page.', 'error');
+        
+        // Ensure loading screen is hidden on error
+        const loadingScreen = document.getElementById('loadingScreen');
+        if (loadingScreen) loadingScreen.classList.remove('show');
+        
+        // Show welcome screen on error
+        const welcomeScreen = document.getElementById('welcomeScreen');
+        if (welcomeScreen) welcomeScreen.classList.add('show');
     }
 });
 
