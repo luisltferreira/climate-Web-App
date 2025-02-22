@@ -910,24 +910,31 @@ const UI = {
             
             if (result.needsEmailConfirmation) {
                 this.showToast(
-                    `Verification email sent to ${email}. Please check your inbox and spam folder.`,
+                    result.message,
                     'info',
                     15000 // Show for 15 seconds
                 );
                 // Switch to login form
                 this.toggleAuthForm('login');
+                
+                // Clear the form
+                document.getElementById('signupForm').reset();
                 return;
             }
 
+            // This part should rarely execute since we're using email confirmation
             STATE.user = result;
             this.startApp();
         } catch (error) {
             console.error('Signup failed:', error);
-            this.showToast(
-                `Signup failed: ${error.message || 'Please try again'}`,
-                'error',
-                10000
-            );
+            // Only show error if it's not related to profile creation
+            if (!error.message.includes('Database error saving')) {
+                this.showToast(
+                    `Signup failed: ${error.message || 'Please try again'}`,
+                    'error',
+                    10000
+                );
+            }
         }
     },
 
