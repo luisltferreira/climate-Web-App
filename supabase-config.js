@@ -154,74 +154,44 @@ const DB = {
 
     async login(email, password) {
         try {
-            console.log('Attempting login with email:', email);
-
             const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
                 email,
                 password
             });
 
             if (authError) {
-                console.error('Auth error:', authError);
-                if (authError.message.includes('Invalid login credentials')) {
-                    throw new Error('Email or password is incorrect');
-                }
-                throw authError;
+                throw new Error(authError.message.includes('Invalid login credentials') 
+                    ? 'Email or password is incorrect' 
+                    : authError.message);
             }
 
             if (!authData?.user) {
                 throw new Error('No user data received during login');
             }
 
-            console.log('Auth successful, user ID:', authData.user.id);
-
-            // Get user profile with more detailed error logging
-            const { data: profiles, error: profileError } = await supabase
+            // Get or create user profile
+            const { data: profiles } = await supabase
                 .from('users')
                 .select('*')
                 .eq('id', authData.user.id);
 
-            if (profileError) {
-                console.error('Profile fetch error details:', {
-                    error: profileError,
-                    userId: authData.user.id,
-                    code: profileError.code,
-                    details: profileError.details,
-                    hint: profileError.hint
-                });
-                throw new Error(`Could not fetch user profile: ${profileError.message}`);
-            }
-
-            // Handle multiple or no profiles
-            if (!profiles || profiles.length === 0) {
-                console.log('No profile found, creating new one');
-                // Create new profile
-                const { data: newProfile, error: createError } = await supabase
+            if (!profiles?.length) {
+                return await supabase
                     .from('users')
-                    .insert([{
+                    .insert({
                         id: authData.user.id,
                         name: authData.user.user_metadata?.name || 'Anonymous',
                         created_events: [],
                         interested_events: []
-                    }])
+                    })
                     .select()
-                    .single();
-
-                if (createError) throw createError;
-                return newProfile;
+                    .single()
+                    .then(({ data }) => data);
             }
 
-            if (profiles.length > 1) {
-                console.warn('Multiple profiles found, using first one:', profiles);
-            }
-
-            // Use the first profile found
-            const profile = profiles[0];
-            console.log('Login complete, returning profile:', profile);
-            return profile;
+            return profiles[0];
 
         } catch (error) {
-            console.error('Login process error:', error);
             throw error;
         }
     },
@@ -238,82 +208,52 @@ const DB = {
 
     async handleEmailConfirmation(name) {
         try {
-            // First try to exchange the token from the URL hash
             const hashParams = new URLSearchParams(window.location.hash.substring(1));
             const accessToken = hashParams.get('access_token');
             const refreshToken = hashParams.get('refresh_token');
-            
-            console.log('Auth tokens from URL:', { accessToken: !!accessToken, refreshToken: !!refreshToken });
 
-            if (accessToken && refreshToken) {
-                // Set the session with the tokens
-                const { data: { session }, error: setSessionError } = await supabase.auth.setSession({
-                    access_token: accessToken,
-                    refresh_token: refreshToken
-                });
-
-                if (setSessionError) {
-                    console.error('Error setting session:', setSessionError);
-                    throw setSessionError;
-                }
-
-                if (!session?.user) {
-                    throw new Error('No user found in session after setting tokens');
-                }
-
-                console.log('Session established:', session.user);
-
-                try {
-                    // Check if profile already exists - fixed query format
-                    const { data: existingProfile, error: checkError } = await supabase
-                        .from('users')
-                        .select('*')
-                        .eq('id', session.user.id)
-                        .single();
-
-                    if (existingProfile) {
-                        console.log('Profile already exists:', existingProfile);
-                        return existingProfile;
-                    }
-
-                    // No profile exists, create one
-                    console.log('Creating new profile for user:', session.user.id);
-                    const { data: profile, error: profileError } = await supabase
-                        .from('users')
-                        .insert({
-                            id: session.user.id,
-                            name: name || session.user.user_metadata?.name || 'Anonymous',
-                            created_events: [],
-                            interested_events: []
-                        })
-                        .select()
-                        .single();
-
-                    if (profileError) {
-                        console.error('Error creating profile:', profileError);
-                        throw profileError;
-                    }
-
-                    console.log('Created new profile:', profile);
-                    return profile;
-
-                } catch (dbError) {
-                    console.error('Database operation failed:', dbError);
-                    throw new Error('Failed to create or retrieve user profile');
-                }
-            } else {
-                throw new Error('No authentication tokens found in URL');
+            if (!accessToken || !refreshToken) {
+                throw new Error('Invalid verification link');
             }
 
-        } catch (error) {
-            console.error('Email confirmation handling error:', {
-                message: error.message,
-                details: error.details,
-                hint: error.hint,
-                code: error.code
+            // Set the session with the tokens
+            const { data: { session }, error: setSessionError } = await supabase.auth.setSession({
+                access_token: accessToken,
+                refresh_token: refreshToken
             });
-            
-            if (error.message?.includes('No authentication tokens')) {
+
+            if (setSessionError || !session?.user) {
+                throw setSessionError || new Error('No user found in session');
+            }
+
+            try {
+                // Check if profile exists and create if it doesn't
+                const { data: profile, error: profileError } = await supabase
+                    .from('users')
+                    .select('*')
+                    .eq('id', session.user.id)
+                    .single();
+
+                if (profile) return profile;
+
+                // Create new profile
+                return await supabase
+                    .from('users')
+                    .insert({
+                        id: session.user.id,
+                        name: name || session.user.user_metadata?.name || 'Anonymous',
+                        created_events: [],
+                        interested_events: []
+                    })
+                    .select()
+                    .single()
+                    .then(({ data }) => data);
+
+            } catch (dbError) {
+                throw new Error('Failed to create or retrieve user profile');
+            }
+        } catch (error) {
+            if (error.message?.includes('Invalid verification')) {
                 throw new Error('Invalid verification link. Please try logging in directly.');
             }
             if (error.message?.includes('JWT expired')) {
