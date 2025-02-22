@@ -976,7 +976,39 @@ document.head.appendChild(style);
 // Update the loadSavedData function
 const loadSavedData = async () => {
     try {
-        // Load all events
+        // Check for existing session
+        const { data: { user }, error: sessionError } = await supabase.auth.getUser();
+        
+        if (sessionError) throw sessionError;
+
+        if (user) {
+            // User is logged in, get their profile
+            const { data: profile, error: profileError } = await supabase
+                .from('users')
+                .select()
+                .eq('id', user.id)
+                .single();
+
+            if (profileError) throw profileError;
+
+            // Update application state
+            STATE.user = {
+                id: profile.id,
+                name: profile.name,
+                createdEvents: Array.isArray(profile.created_events) ? profile.created_events : [],
+                interestedEvents: Array.isArray(profile.interested_events) ? profile.interested_events : []
+            };
+
+            // Load events
+            const events = await DB.getEvents();
+            STATE.events = events || [];
+
+            // Start the app directly
+            await UI.startApp();
+            return;
+        }
+
+        // No session, load events only
         const events = await DB.getEvents();
         STATE.events = events || [];
 
@@ -991,6 +1023,9 @@ const loadSavedData = async () => {
     } catch (error) {
         console.error('Error loading saved data:', error);
         STATE.events = [];
+        // Show welcome screen on error
+        const welcomeScreen = document.getElementById('welcomeScreen');
+        if (welcomeScreen) welcomeScreen.classList.add('show');
     }
 };
 
@@ -1029,17 +1064,22 @@ document.addEventListener('DOMContentLoaded', async () => {
             return;
         }
 
-        // Normal initialization
-        await loadSavedData();
+        // Initialize map
         await MapManager.init();
         
-        const welcomeScreen = document.getElementById('welcomeScreen');
-        const map = document.getElementById('map');
-        const menu = document.querySelector('.menu');
+        // Load saved data and check for existing session
+        await loadSavedData();
         
-        welcomeScreen.classList.add('show');
-        map.style.visibility = 'hidden';
-        menu.style.display = 'none';
+        // Only show welcome screen if no session exists
+        if (!STATE.user.id) {
+            const welcomeScreen = document.getElementById('welcomeScreen');
+            const map = document.getElementById('map');
+            const menu = document.querySelector('.menu');
+            
+            if (welcomeScreen) welcomeScreen.classList.add('show');
+            if (map) map.style.visibility = 'hidden';
+            if (menu) menu.style.display = 'none';
+        }
         
     } catch (error) {
         console.error('App initialization failed:', error);
