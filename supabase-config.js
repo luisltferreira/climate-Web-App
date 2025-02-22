@@ -111,9 +111,11 @@ const DB = {
             // Store the name for later use after email confirmation
             localStorage.setItem('pendingUserName', name);
 
-            // Use GitHub Pages URL instead of localhost
-            const githubPagesUrl = 'https://luisferreira1.github.io/climate';
+            // Use the correct GitHub Pages URL format
+            const githubPagesUrl = 'https://luisferreira1.github.io/climate/index.html';
             const redirectTo = `${githubPagesUrl}?verification=true`;
+            
+            console.log('Redirect URL:', redirectTo); // Debug log
             
             // Try to sign up the user
             const { data: authData, error: authError } = await supabase.auth.signUp({
