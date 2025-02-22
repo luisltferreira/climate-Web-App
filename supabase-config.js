@@ -111,8 +111,8 @@ const DB = {
             // Store the name for later use after email confirmation
             localStorage.setItem('pendingUserName', name);
 
-            // Use the exact URL that matches your deployment
-            const redirectTo = 'https://luisltferreira.github.io/climate-Web-App/?verification=true';
+            // Use the base URL without any parameters
+            const redirectTo = 'https://luisltferreira.github.io/climate-Web-App/';
             
             console.log('Redirect URL:', redirectTo); // Debug log
             
@@ -122,7 +122,7 @@ const DB = {
                 password,
                 options: {
                     data: { name },
-                    emailRedirectTo: redirectTo // Single emailRedirectTo property
+                    emailRedirectTo: redirectTo // Use base URL only
                 }
             });
 
