@@ -122,14 +122,15 @@ const DB = {
             // Store the name for later use after email confirmation
             localStorage.setItem('pendingUserName', name);
 
-            const redirectTo = window.location.origin || 'http://localhost:3000';
+            // Use the full URL path for email confirmation
+            const redirectTo = `${window.location.origin}${window.location.pathname}`;
             
             const { data: authData, error: authError } = await supabase.auth.signUp({
                 email,
                 password,
                 options: {
-                    data: { name }, // Store name in user metadata
-                    emailRedirectTo: redirectTo
+                    data: { name },
+                    emailRedirectTo: redirectTo // This should match your actual site URL
                 }
             });
 
@@ -154,7 +155,6 @@ const DB = {
 
         } catch (error) {
             console.error('Signup process error:', error);
-            // Cleanup stored name if there's an error
             localStorage.removeItem('pendingUserName');
             throw error;
         }
