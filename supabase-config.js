@@ -111,7 +111,7 @@ const DB = {
             // Store the name for later use after email confirmation
             localStorage.setItem('pendingUserName', name);
 
-            // Use the base URL without any parameters
+            // Use the base URL
             const redirectTo = 'https://luisltferreira.github.io/climate-Web-App/';
             
             console.log('Redirect URL:', redirectTo); // Debug log

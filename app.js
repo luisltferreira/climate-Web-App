@@ -1049,35 +1049,52 @@ const initializeApp = async () => {
         const loadingScreen = document.getElementById('loadingScreen');
         if (loadingScreen) loadingScreen.classList.add('show');
 
-        // Check for auth state first
-        const { data: { session }, error: sessionError } = await supabase.auth.getSession();
-        
-        if (session?.user?.email_confirmed_at) {
-            // User has just confirmed their email
-            const name = localStorage.getItem('pendingUserName');
-            console.log('Stored name for verification:', name);
+        // Check for verification in URL and hash
+        const params = new URLSearchParams(window.location.search);
+        const hasVerificationParam = params.get('verification') === 'true';
+        const hasHash = window.location.hash.includes('access_token');
 
-            // Handle the email confirmation
-            const userData = await DB.handleEmailConfirmation(name);
-            console.log('Email confirmation successful:', userData);
-            
-            // Update application state
-            STATE.user = {
-                id: userData.id,
-                name: userData.name,
-                createdEvents: Array.isArray(userData.created_events) ? userData.created_events : [],
-                interestedEvents: Array.isArray(userData.interested_events) ? userData.interested_events : []
-            };
-            
-            // Clear verification state
-            localStorage.removeItem('pendingUserName');
-            
-            // Show success message
-            UI.showToast('Email verified successfully! Welcome to the app.', 'success');
-            
-            // Start the app
-            await UI.startApp();
-            return;
+        if (hasVerificationParam && hasHash) {
+            try {
+                // Get the name from storage
+                const name = localStorage.getItem('pendingUserName');
+                console.log('Stored name for verification:', name);
+
+                // Handle the email confirmation
+                const userData = await DB.handleEmailConfirmation(name);
+                console.log('Email confirmation successful:', userData);
+                
+                // Update application state
+                STATE.user = {
+                    id: userData.id,
+                    name: userData.name,
+                    createdEvents: Array.isArray(userData.created_events) ? userData.created_events : [],
+                    interestedEvents: Array.isArray(userData.interested_events) ? userData.interested_events : []
+                };
+                
+                // Clear verification state and URL parameters
+                window.history.replaceState({}, document.title, window.location.pathname);
+                localStorage.removeItem('pendingUserName');
+                
+                // Show success message
+                UI.showToast('Email verified successfully! Welcome to the app.', 'success');
+                
+                // Start the app
+                await UI.startApp();
+                return;
+            } catch (error) {
+                console.error('Verification error:', error);
+                UI.showToast(error.message || 'Email verification failed. Please try again.', 'error');
+                
+                // Hide loading screen and show welcome screen
+                if (loadingScreen) loadingScreen.classList.remove('show');
+                const welcomeScreen = document.getElementById('welcomeScreen');
+                if (welcomeScreen) welcomeScreen.classList.add('show');
+                
+                // Switch to login form since verification failed
+                UI.toggleAuthForm('login');
+                return;
+            }
         }
 
         // Continue with normal initialization
