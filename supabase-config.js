@@ -115,6 +115,7 @@ const DB = {
             const baseUrl = window.location.origin + window.location.pathname;
             const redirectTo = `${baseUrl}?verification=true`;
             
+            // Try to sign up the user
             const { data: authData, error: authError } = await supabase.auth.signUp({
                 email,
                 password,
@@ -136,7 +137,27 @@ const DB = {
                 throw new Error('Failed to create user account');
             }
 
-            // Return confirmation needed response with more detailed message
+            // Create user profile immediately
+            try {
+                const { error: profileError } = await supabase
+                    .from('users')
+                    .insert([{
+                        id: authData.user.id,
+                        name: name,
+                        created_events: [],
+                        interested_events: []
+                    }]);
+
+                if (profileError) {
+                    console.error('Profile creation error:', profileError);
+                    // Don't throw here, still allow email verification to proceed
+                }
+            } catch (profileError) {
+                console.error('Profile creation error:', profileError);
+                // Don't throw here, still allow email verification to proceed
+            }
+
+            // Return confirmation needed response
             return {
                 needsEmailConfirmation: true,
                 email: email,
@@ -146,6 +167,12 @@ const DB = {
         } catch (error) {
             console.error('Signup process error:', error);
             localStorage.removeItem('pendingUserName');
+
+            // Handle specific error messages
+            if (error.message.includes('User already registered')) {
+                throw new Error('This email is already registered. Please try logging in instead.');
+            }
+
             throw error;
         }
     },
