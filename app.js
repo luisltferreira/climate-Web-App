@@ -1035,8 +1035,8 @@ const loadSavedData = async () => {
     }
 };
 
-// Initialize the app
-document.addEventListener('DOMContentLoaded', async () => {
+// Move all initialization into a single function
+const initializeApp = async () => {
     try {
         // Show loading screen initially
         const loadingScreen = document.getElementById('loadingScreen');
@@ -1105,6 +1105,20 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         // Hide loading screen
         if (loadingScreen) loadingScreen.classList.remove('show');
+
+        // Add event listeners for forms
+        const signupForm = document.getElementById('signupForm');
+        const loginForm = document.getElementById('loginForm');
+        
+        if (signupForm) {
+            signupForm.removeEventListener('submit', UI.handleSignup);
+            signupForm.addEventListener('submit', (e) => UI.handleSignup(e));
+        }
+        
+        if (loginForm) {
+            loginForm.removeEventListener('submit', UI.handleLogin);
+            loginForm.addEventListener('submit', (e) => UI.handleLogin(e));
+        }
         
     } catch (error) {
         console.error('App initialization failed:', error);
@@ -1118,16 +1132,19 @@ document.addEventListener('DOMContentLoaded', async () => {
         const welcomeScreen = document.getElementById('welcomeScreen');
         if (welcomeScreen) welcomeScreen.classList.add('show');
     }
+};
+
+// Single DOMContentLoaded event listener
+let initialized = false;
+document.addEventListener('DOMContentLoaded', () => {
+    if (!initialized) {
+        initialized = true;
+        initializeApp();
+    }
 });
 
-// Handle errors globally
+// Handle errors globally (keep this separate)
 window.addEventListener('error', (event) => {
     console.error('Global error:', event.error);
-    alert('An error occurred. Please refresh the page.');
-});
-
-// Add event listeners
-document.addEventListener('DOMContentLoaded', () => {
-    document.getElementById('signupForm').addEventListener('submit', (e) => UI.handleSignup(e));
-    document.getElementById('loginForm').addEventListener('submit', (e) => UI.handleLogin(e));
+    UI.showToast('An error occurred. Please refresh the page.', 'error');
 });
