@@ -780,46 +780,30 @@ const UI = {
     },
 
     async startApp() {
-        const nameInput = document.getElementById('userName');
-        const name = nameInput.value.trim();
-        
-        if (!name) {
-            this.showToast('Please enter your name', 'error');
-        return;
-    }
-
         try {
             // Show loading screen first
             const loadingScreen = document.getElementById('loadingScreen');
             loadingScreen.classList.add('show');
             
-            // Then hide welcome screen
+            // Hide welcome screen
             document.getElementById('welcomeScreen').classList.remove('show');
-
-            // Check for existing user or create new one
-            let user = await DB.getUserByName(name);
-            
-            if (!user) {
-                user = await DB.createUser({ name });
-            }
-
-            // Update STATE with proper array types
-            STATE.user = {
-                id: user.id,
-                name: user.name,
-                createdEvents: Array.isArray(user.created_events) ? user.created_events : [],
-                interestedEvents: Array.isArray(user.interested_events) ? user.interested_events : []
-            };
-
-            const position = await this.requestLocationPermission();
 
             // Load events from database
             const events = await DB.getEvents();
             console.log('Loaded events:', events); // Debug log
             STATE.events = events;
 
+            // Try to get user's location
+            try {
+                const position = await this.requestLocationPermission();
+                STATE.locationPermission = true;
+            } catch (error) {
+                console.warn('Location permission denied:', error);
+                STATE.locationPermission = false;
+            }
+
             // Before showing the map, wait for the loading screen animation
-            await new Promise(resolve => setTimeout(resolve, 2000));
+            await new Promise(resolve => setTimeout(resolve, 1000));
 
             // Show map and menu
             const map = document.getElementById('map');
@@ -830,9 +814,17 @@ const UI = {
             menu.classList.add('show');
             loadingScreen.classList.remove('show');
             
-            STATE.map.setView([position.coords.latitude, position.coords.longitude], 13);
-            STATE.map.invalidateSize();
-            this.showToast(`Welcome${user ? ' back' : ''}, ${name}!`, 'success');
+            if (STATE.map) {
+                STATE.map.invalidateSize();
+                
+                // If we have location permission, center the map
+                if (STATE.locationPermission) {
+                    const position = await this.getCurrentPosition();
+                    STATE.map.setView([position.coords.latitude, position.coords.longitude], 13);
+                }
+            }
+
+            this.showToast(`Welcome${STATE.user.name ? ' ' + STATE.user.name : ''}!`, 'success');
             MapManager.renderEvents();
 
         } catch (error) {
