@@ -172,23 +172,49 @@ const DB = {
                 throw new Error('No user data received during login');
             }
 
-            console.log('Login successful, getting user profile...');
+            console.log('Auth successful, user ID:', authData.user.id);
 
-            // Get user profile
+            // Get user profile with more detailed error logging
             const { data: profile, error: profileError } = await supabase
                 .from('users')
-                .select()
+                .select('*')  // Explicitly select all columns
                 .eq('id', authData.user.id)
                 .single();
 
             if (profileError) {
-                console.error('Profile fetch error:', profileError);
-                throw new Error('Could not fetch user profile');
+                console.error('Profile fetch error details:', {
+                    error: profileError,
+                    userId: authData.user.id,
+                    code: profileError.code,
+                    details: profileError.details,
+                    hint: profileError.hint
+                });
+                throw new Error(`Could not fetch user profile: ${profileError.message}`);
             }
 
             if (!profile) {
-                console.error('No profile found for user');
-                throw new Error('User profile not found');
+                console.error('No profile found for user ID:', authData.user.id);
+                
+                // Attempt to create profile if it doesn't exist
+                try {
+                    const { data: newProfile, error: createError } = await supabase
+                        .from('users')
+                        .insert([{
+                            id: authData.user.id,
+                            name: authData.user.user_metadata?.name || 'Anonymous',
+                            created_events: [],
+                            interested_events: []
+                        }])
+                        .select()
+                        .single();
+
+                    if (createError) throw createError;
+                    console.log('Created new profile:', newProfile);
+                    return newProfile;
+                } catch (createError) {
+                    console.error('Failed to create profile:', createError);
+                    throw new Error('Could not create user profile');
+                }
             }
 
             console.log('Login complete, returning profile:', profile);
