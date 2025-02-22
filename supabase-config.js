@@ -176,11 +176,10 @@ const DB = {
             console.log('Auth successful, user ID:', authData.user.id);
 
             // Get user profile with more detailed error logging
-            const { data: profile, error: profileError } = await supabase
+            const { data: profiles, error: profileError } = await supabase
                 .from('users')
-                .select('*')  // Explicitly select all columns
-                .eq('id', authData.user.id)
-                .single();
+                .select('*')
+                .eq('id', authData.user.id);
 
             if (profileError) {
                 console.error('Profile fetch error details:', {
@@ -193,31 +192,31 @@ const DB = {
                 throw new Error(`Could not fetch user profile: ${profileError.message}`);
             }
 
-            if (!profile) {
-                console.error('No profile found for user ID:', authData.user.id);
-                
-                // Attempt to create profile if it doesn't exist
-                try {
-                    const { data: newProfile, error: createError } = await supabase
-                        .from('users')
-                        .insert([{
-                            id: authData.user.id,
-                            name: authData.user.user_metadata?.name || 'Anonymous',
-                            created_events: [],
-                            interested_events: []
-                        }])
-                        .select()
-                        .single();
+            // Handle multiple or no profiles
+            if (!profiles || profiles.length === 0) {
+                console.log('No profile found, creating new one');
+                // Create new profile
+                const { data: newProfile, error: createError } = await supabase
+                    .from('users')
+                    .insert([{
+                        id: authData.user.id,
+                        name: authData.user.user_metadata?.name || 'Anonymous',
+                        created_events: [],
+                        interested_events: []
+                    }])
+                    .select()
+                    .single();
 
-                    if (createError) throw createError;
-                    console.log('Created new profile:', newProfile);
-                    return newProfile;
-                } catch (createError) {
-                    console.error('Failed to create profile:', createError);
-                    throw new Error('Could not create user profile');
-                }
+                if (createError) throw createError;
+                return newProfile;
             }
 
+            if (profiles.length > 1) {
+                console.warn('Multiple profiles found, using first one:', profiles);
+            }
+
+            // Use the first profile found
+            const profile = profiles[0];
             console.log('Login complete, returning profile:', profile);
             return profile;
 
