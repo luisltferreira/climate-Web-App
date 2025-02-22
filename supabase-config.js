@@ -106,17 +106,15 @@ const DB = {
 
     async signUp(email, password, name) {
         try {
-            // First check if user already exists
-            const { data: existingUser } = await supabase.auth.signInWithPassword({
-                email,
-                password
-            });
+            console.log('Attempting signup with:', { email, name });
 
+            // First check if user already exists
+            const { data: existingUser } = await supabase.auth.getUser();
             if (existingUser?.user) {
-                throw new Error('User already exists. Please login instead.');
+                console.log('User already exists:', existingUser);
+                throw new Error('An account with this email already exists. Please try logging in instead.');
             }
 
-            // Attempt signup
             const { data: authData, error: authError } = await supabase.auth.signUp({
                 email,
                 password,
@@ -126,42 +124,66 @@ const DB = {
                 }
             });
 
+            console.log('Signup response:', { authData, authError });
+
             if (authError) {
                 console.error('Signup error:', authError);
                 throw authError;
             }
 
-            console.log('Signup response:', authData); // Debug log
+            if (!authData?.user) {
+                console.error('No user data received');
+                throw new Error('Failed to create user account');
+            }
 
-            if (authData?.user) {
+            // Check if email is confirmed
+            if (!authData.user.confirmed_at) {
+                console.log('Email confirmation needed for:', email);
                 return {
                     needsEmailConfirmation: true,
                     email: email,
-                    message: 'Please check your email (including spam folder) to confirm your account.'
+                    message: 'Please check your email (including spam folder) for the confirmation link'
                 };
-            } else {
-                throw new Error('Failed to create user account.');
             }
 
+            // Create user profile
+            const { data: userData, error: userError } = await supabase
+                .from('users')
+                .insert([{
+                    id: authData.user.id,
+                    name: name,
+                    created_events: [],
+                    interested_events: []
+                }])
+                .select()
+                .single();
+
+            if (userError) throw userError;
+            return userData;
         } catch (error) {
-            console.error('Error in signUp:', error);
+            console.error('Signup process error:', error);
             throw error;
         }
     },
 
     async login(email, password) {
         try {
+            console.log('Attempting login with email:', email);
+
             const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
                 email,
                 password
             });
 
             if (authError) {
-                if (authError.message.includes('Email not confirmed')) {
-                    throw new Error('Please confirm your email before logging in');
+                console.error('Auth error:', authError);
+                if (authError.message.includes('Invalid login credentials')) {
+                    throw new Error('Email or password is incorrect');
                 }
                 throw authError;
             }
+
+            console.log('Login successful, getting user profile...');
 
             // Get user profile
             const { data: userData, error: userError } = await supabase
@@ -170,9 +192,14 @@ const DB = {
                 .eq('id', authData.user.id)
                 .single();
 
-            if (userError) throw userError;
+            if (userError) {
+                console.error('User profile error:', userError);
+                throw userError;
+            }
+
             return userData;
         } catch (error) {
+            console.error('Login process error:', error);
             throw error;
         }
     },

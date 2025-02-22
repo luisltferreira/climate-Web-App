@@ -888,7 +888,7 @@ const UI = {
             
             if (result.needsEmailConfirmation) {
                 this.showToast(
-                    result.message || 'Please check your email (including spam folder) to confirm your account',
+                    `Verification email sent to ${email}. Please check your inbox and spam folder.`,
                     'info',
                     15000 // Show for 15 seconds
                 );
@@ -901,7 +901,11 @@ const UI = {
             this.startApp();
         } catch (error) {
             console.error('Signup failed:', error);
-            this.showToast(error.message, 'error', 5000);
+            this.showToast(
+                `Signup failed: ${error.message || 'Please try again'}`,
+                'error',
+                10000
+            );
         }
     },
 
