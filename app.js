@@ -1052,13 +1052,35 @@ const initializeApp = async () => {
         // Check for verification in URL and hash
         const params = new URLSearchParams(window.location.search);
         const hasVerificationParam = params.get('verification') === 'true';
-        const hasHash = window.location.hash.includes('access_token');
+        const hasHash = window.location.hash.length > 0; // Changed this check
+        
+        console.log('URL state:', { 
+            hasVerificationParam, 
+            hasHash,
+            hash: window.location.hash,
+            search: window.location.search 
+        });
 
-        if (hasVerificationParam && hasHash) {
+        if (hasVerificationParam) {
             try {
+                // Wait a moment for Supabase to process the hash
+                await new Promise(resolve => setTimeout(resolve, 1000));
+
                 // Get the name from storage
                 const name = localStorage.getItem('pendingUserName');
                 console.log('Stored name for verification:', name);
+
+                // Get current session
+                const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+                console.log('Session check:', { session, sessionError });
+
+                if (sessionError) {
+                    throw new Error(`Session error: ${sessionError.message}`);
+                }
+
+                if (!session) {
+                    throw new Error('No session found after verification');
+                }
 
                 // Handle the email confirmation
                 const userData = await DB.handleEmailConfirmation(name);
@@ -1083,7 +1105,12 @@ const initializeApp = async () => {
                 await UI.startApp();
                 return;
             } catch (error) {
-                console.error('Verification error:', error);
+                console.error('Verification error details:', {
+                    error,
+                    stack: error.stack,
+                    message: error.message
+                });
+                
                 UI.showToast(error.message || 'Email verification failed. Please try again.', 'error');
                 
                 // Hide loading screen and show welcome screen
