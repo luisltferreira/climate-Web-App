@@ -115,12 +115,16 @@ const DB = {
                 throw new Error('An account with this email already exists. Please try logging in instead.');
             }
 
+            // Update the emailRedirectTo to use your actual deployment URL
+            // For local development, use localhost
+            const redirectTo = window.location.origin || 'http://localhost:3000';
+            
             const { data: authData, error: authError } = await supabase.auth.signUp({
                 email,
                 password,
                 options: {
                     data: { name },
-                    emailRedirectTo: window.location.origin
+                    emailRedirectTo: redirectTo
                 }
             });
 
@@ -185,19 +189,25 @@ const DB = {
 
             console.log('Login successful, getting user profile...');
 
-            // Get user profile
-            const { data: userData, error: userError } = await supabase
+            // Get user profile - Modified to handle multiple results
+            const { data: userResults, error: userError } = await supabase
                 .from('users')
                 .select()
-                .eq('id', authData.user.id)
-                .single();
+                .eq('id', authData.user.id);
 
             if (userError) {
                 console.error('User profile error:', userError);
                 throw userError;
             }
 
-            return userData;
+            // Handle case where no user profile exists
+            if (!userResults || userResults.length === 0) {
+                throw new Error('User profile not found');
+            }
+
+            // Return the first user profile found
+            return userResults[0];
+
         } catch (error) {
             console.error('Login process error:', error);
             throw error;
